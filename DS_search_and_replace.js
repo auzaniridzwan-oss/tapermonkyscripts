@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Braze DS Demo Customizer (Pro)
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  Replaces text and UI logo for Braze DS Demos
 // @author       You
 // @match        https://portal.offerfit.ai/clients/retail_company/*
@@ -50,28 +50,35 @@
     // ENGINE
     // =================================================================
 
+    /** Idempotent: safe to run on every mutation (Vue may reset label text). */
+    function applyTextReplacements(el) {
+        const t = el.textContent.trim();
+        for (let i = 0; i < TEXT_REPLACEMENTS.length; i++) {
+            const item = TEXT_REPLACEMENTS[i];
+            if (t === item.from) {
+                el.textContent = item.to;
+                return;
+            }
+        }
+    }
+
+    /** Naive UI select: visible value lives in a leaf div, not in the generic tag list. */
+    function processSelectionLabels() {
+        document.querySelectorAll('.n-base-selection-input__content').forEach((el) => {
+            if (el.children.length > 0) return;
+            applyTextReplacements(el);
+        });
+    }
+
     function processUI() {
-        // 1. Get all potential text-holding elements
+        processSelectionLabels();
+
         const allElements = document.querySelectorAll('span, a, h1, h2, h3, h4, p, td, th, label');
 
-        allElements.forEach(el => {
-            // SAFEGUARD 1: Skip if already processed
-            if (el.getAttribute('data-demo-text-replaced')) return;
-
-            // SAFEGUARD 2: Skip functional input fields entirely
+        allElements.forEach((el) => {
             if (['SELECT', 'INPUT', 'TEXTAREA', 'BUTTON'].includes(el.tagName)) return;
-
-            // SAFEGUARD 3: Only replace text if this element has NO children
-            // This prevents us from accidentally destroying a container that holds a dropdown menu
             if (el.children.length > 0) return;
-
-            // Perform the replacement
-            TEXT_REPLACEMENTS.forEach(item => {
-                if (el.innerText.trim() === item.from) {
-                    el.innerText = item.to;
-                    el.setAttribute('data-demo-text-replaced', 'true');
-                }
-            });
+            applyTextReplacements(el);
         });
 
         // Handle Images
