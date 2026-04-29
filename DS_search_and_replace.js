@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Braze DS Demo Customizer (Pro)
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.5
 // @description  Replaces text and UI logo for Braze DS Demos (select menus included)
 // @author       You
 // @match        https://portal.offerfit.ai/clients/retail_company/*
@@ -50,13 +50,34 @@
     // ENGINE
     // =================================================================
 
+    /**
+     * Update visible text without `el.textContent = ...`, which removes Vue / Naive
+     * comment anchors and breaks patching (insertBefore on null).
+     */
+    function applyMappedText(el, nextText) {
+        if (!el || !el.isConnected) return;
+
+        const firstText = Array.from(el.childNodes).find(
+            (n) => n.nodeType === Node.TEXT_NODE
+        );
+        if (firstText) {
+            firstText.nodeValue = nextText;
+            return;
+        }
+
+        if (el.children.length === 0 && el.childNodes.length === 0) {
+            el.appendChild(document.createTextNode(nextText));
+        }
+    }
+
     /** Idempotent: safe to run on every mutation (Vue may reset label text). */
     function applyTextReplacements(el) {
+        if (!el || !el.isConnected) return;
         const t = el.textContent.trim();
         for (let i = 0; i < TEXT_REPLACEMENTS.length; i++) {
             const item = TEXT_REPLACEMENTS[i];
             if (t === item.from) {
-                el.textContent = item.to;
+                applyMappedText(el, item.to);
                 return;
             }
         }
@@ -79,6 +100,7 @@
     /** Naive UI select: closed control label. */
     function processSelectionLabels() {
         document.querySelectorAll('.n-base-selection-input__content').forEach((el) => {
+            if (!el.isConnected) return;
             applyReplacementsToLabelLike(el);
         });
     }
@@ -86,6 +108,7 @@
     /** Naive UI select: open menu options (same DOM used for hover highlight). */
     function processSelectMenuOptions() {
         document.querySelectorAll('.n-base-select-menu .n-base-select-option__content').forEach((el) => {
+            if (!el.isConnected) return;
             applyReplacementsToLabelLike(el);
         });
     }
@@ -93,6 +116,7 @@
     /** Native browser tooltip on options often uses `title` with the raw label. */
     function processSelectMenuOptionTitles() {
         document.querySelectorAll('.n-base-select-menu .n-base-select-option[title]').forEach((el) => {
+            if (!el.isConnected) return;
             const raw = el.getAttribute('title');
             if (raw == null) return;
             const trimmed = raw.trim();
@@ -131,8 +155,17 @@
         });
     }
 
-    const observer = new MutationObserver((mutations) => {
-        processUI();
+    let processDebounceId = null;
+    function scheduleProcessUI() {
+        if (processDebounceId != null) clearTimeout(processDebounceId);
+        processDebounceId = setTimeout(() => {
+            processDebounceId = null;
+            processUI();
+        }, 50);
+    }
+
+    const observer = new MutationObserver(() => {
+        scheduleProcessUI();
     });
 
     observer.observe(document.body, {
