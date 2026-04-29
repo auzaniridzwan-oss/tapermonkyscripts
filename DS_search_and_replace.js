@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Braze DS Demo Customizer (Pro)
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  Replaces text and UI logo for Braze DS Demos (select menus included)
 // @author       You
 // @match        https://portal.offerfit.ai/clients/retail_company/*
@@ -83,15 +83,19 @@
         }
     }
 
-    /** Leaf text, or one inner span (Naive sometimes wraps label text). */
+    /**
+     * Leaf text node / empty element children, or exactly one inner element with no
+     * element children (e.g. Naive span wrapper, or page titles in a div).
+     */
     function applyReplacementsToLabelLike(el) {
+        if (!el || !el.isConnected) return;
         if (el.children.length === 0) {
             applyTextReplacements(el);
             return;
         }
         if (el.children.length === 1) {
             const inner = el.firstElementChild;
-            if (inner && inner.tagName === 'SPAN' && inner.children.length === 0) {
+            if (inner && inner.children.length === 0) {
                 applyTextReplacements(inner);
             }
         }
@@ -135,12 +139,14 @@
         processSelectMenuOptions();
         processSelectMenuOptionTitles();
 
-        const allElements = document.querySelectorAll('span, a, h1, h2, h3, h4, p, td, th, label');
+        const allElements = document.querySelectorAll(
+            'span, a, h1, h2, h3, h4, p, td, th, label, div'
+        );
 
         allElements.forEach((el) => {
+            if (!el.isConnected) return;
             if (['SELECT', 'INPUT', 'TEXTAREA', 'BUTTON'].includes(el.tagName)) return;
-            if (el.children.length > 0) return;
-            applyTextReplacements(el);
+            applyReplacementsToLabelLike(el);
         });
 
         // Handle Images
