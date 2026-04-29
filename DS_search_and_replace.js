@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Braze DS Demo Customizer (Pro)
 // @namespace    http://tampermonkey.net/
-// @version      1.3
-// @description  Replaces text and UI logo for Braze DS Demos
+// @version      1.4
+// @description  Replaces text and UI logo for Braze DS Demos (select menus included)
 // @author       You
 // @match        https://portal.offerfit.ai/clients/retail_company/*
 // @match        https://portal.offerfit.ai/use-cases?org=retail_company*
@@ -62,16 +62,54 @@
         }
     }
 
-    /** Naive UI select: visible value lives in a leaf div, not in the generic tag list. */
+    /** Leaf text, or one inner span (Naive sometimes wraps label text). */
+    function applyReplacementsToLabelLike(el) {
+        if (el.children.length === 0) {
+            applyTextReplacements(el);
+            return;
+        }
+        if (el.children.length === 1) {
+            const inner = el.firstElementChild;
+            if (inner && inner.tagName === 'SPAN' && inner.children.length === 0) {
+                applyTextReplacements(inner);
+            }
+        }
+    }
+
+    /** Naive UI select: closed control label. */
     function processSelectionLabels() {
         document.querySelectorAll('.n-base-selection-input__content').forEach((el) => {
-            if (el.children.length > 0) return;
-            applyTextReplacements(el);
+            applyReplacementsToLabelLike(el);
+        });
+    }
+
+    /** Naive UI select: open menu options (same DOM used for hover highlight). */
+    function processSelectMenuOptions() {
+        document.querySelectorAll('.n-base-select-menu .n-base-select-option__content').forEach((el) => {
+            applyReplacementsToLabelLike(el);
+        });
+    }
+
+    /** Native browser tooltip on options often uses `title` with the raw label. */
+    function processSelectMenuOptionTitles() {
+        document.querySelectorAll('.n-base-select-menu .n-base-select-option[title]').forEach((el) => {
+            const raw = el.getAttribute('title');
+            if (raw == null) return;
+            const trimmed = raw.trim();
+            for (let i = 0; i < TEXT_REPLACEMENTS.length; i++) {
+                const item = TEXT_REPLACEMENTS[i];
+                if (trimmed === item.from) {
+                    el.setAttribute('title', item.to);
+                    return;
+                }
+            }
         });
     }
 
     function processUI() {
         processSelectionLabels();
+        processSelectMenuOptions();
+        processSelectMenuOptionTitles();
 
         const allElements = document.querySelectorAll('span, a, h1, h2, h3, h4, p, td, th, label');
 
